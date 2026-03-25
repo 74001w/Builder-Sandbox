@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Snowman Word Game</title>
+<style>
+  body {
+    margin: 0;
+    background: #000;
+    font-family: Arial, sans-serif;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #game-container {
+    position: relative;
+    margin-top: 10px;
+  }
+
+  canvas {
+    border: 2px solid #fff;
+    background: #001020;
+    display: block;
+  }
+
+  #ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: #fff;
+    font-size: 14px;
+    text-shadow: 0 0 4px #000;
+  }
+
+  #message {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 24px;
+    font-weight: bold;
+    text-shadow: 0 0 6px #000;
+  }
+
+  #word-display {
+    margin-top: 10px;
+    font-size: 28px;
+    letter-spacing: 8px;
+  }
+
+  #wrong-letters {
+    margin-top: 5px;
+    font-size: 16px;
+  }
+
+  #keyboard {
+    margin-top: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    max-width: 700px;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .key {
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #123;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .key:disabled {
+    background: #333;
+    cursor: default;
+    color: #777;
+  }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="gameCanvas" width="800" height="500"></canvas>
+  <div id="ui">
+    <div id="stats">Games: 0 | Wins: 0 | Losses: 0</div>
+  </div>
+  <div id="message"></div>
+</div>
+
+<div id="word-display"></div>
+<div id="wrong-letters">Wrong letters: </div>
+<div id="keyboard"></div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  const statsEl = document.getElementById('stats');
+  const messageEl = document.getElementById('message');
+  const wordDisplayEl = document.getElementById('word-display');
+  const wrongLettersEl = document.getElementById('wrong-letters');
+  const keyboardEl = document.getElementById('keyboard');
+
+  const MAX_WRONG = 9;
+
+  const WORDS = [
+    'WINTER', 'SNOWMAN', 'HOLIDAY', 'FROST', 'ICICLE',
+    'SLEIGH', 'BLIZZARD', 'PENGUIN', 'SCARF', 'MITTENS'
+  ];
+
+  let gamesPlayed = 0;
+  let wins = 0;
+  let losses = 0;
+
+  let secretWord = '';
+  let guessedLetters = new Set();
+  let wrongLetters = new Set();
+  let wrongCount = 0;
+  let gameOver = false;
+
+  function randomWord() {
+    return WORDS[Math.floor(Math.random() * WORDS.length)];
+  }
+
+  function initKeyboard() {
+    keyboardEl.innerHTML = '';
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    for (const ch of letters) {
+      const btn = document.createElement('button');
+      btn.textContent = ch;
+      btn.className = 'key';
+      btn.addEventListener('click', () => handleGuess(ch));
+      keyboardEl.appendChild(btn);
+    }
+  }
+
+  function setKeyboardEnabled(enabled) {
+    const buttons = keyboardEl.querySelectorAll('button');
+    buttons.forEach(b => b.disabled = !enabled || b.disabled && !enabled ? true : b.disabled);
+  }
+
+  function resetGame() {
+    secretWord = randomWord();
+    guessedLetters = new Set();
+    wrongLetters = new Set();
+    wrongCount = 0;
+    gameOver = false;
+    messageEl.textContent = '';
+    initKeyboard();
+    updateStats();
+    updateWordDisplay();
+    updateWrongLettersDisplay();
+    drawScene();
+  }
+
+  function updateStats() {
+    statsEl.textContent = `Games: ${gamesPlayed} | Wins: ${wins} | Losses: ${losses}`;
+  }
+
+  function updateWordDisplay() {
+    let display = '';
+    for (const ch of secretWord) {
+      display += guessedLetters.has(ch) ? ch + ' ' : '_ ';
+    }
+    wordDisplayEl.textContent = display.trim();
+  }
+
+  function updateWrongLettersDisplay() {
+    wrongLettersEl.textContent = 'Wrong letters: ' + Array.from(wrongLetters).join(' ');
+  }
+
+  function handleGuess(letter) {
+    if (gameOver) return;
+    if (guessedLetters.has(letter) || wrongLetters.has(letter)) return;
+
+    // disable button
+    const btns = keyboardEl.querySelectorAll('button');
+    btns.forEach(b => {
+      if (b.textContent === letter) b.disabled = true;
+    });
+
+    if (secretWord.includes(letter)) {
+      guessedLetters.add(letter);
+      updateWordDisplay();
+      checkWin();
+    } else {
+      wrongLetters.add(letter);
+      wrongCount++;
+      updateWrongLettersDisplay();
+      drawScene();
+      checkLose();
+    }
+  }
+
+  function checkWin() {
+    let allGuessed = true;
+    for (const ch of secretWord) {
+      if (!guessedLetters.has(ch)) {
+        allGuessed = false;
+        break;
+      }
+    }
+    if (allGuessed) {
+      gameOver = true;
+      wins++;
+      gamesPlayed++;
+      messageEl.textContent = 'You Won!';
+      updateStats();
+      setKeyboardEnabled(false);
+      askPlayAgain();
+    }
+  }
+
+  function checkLose() {
+    if (wrongCount >= MAX_WRONG) {
+      gameOver = true;
+      losses++;
+      gamesPlayed++;
+      messageEl.textContent = `You Lost! Word was: ${secretWord}`;
+      updateStats();
+      setKeyboardEnabled(false);
+      askPlayAgain();
+    }
+  }
+
+  function askPlayAgain() {
+    setTimeout(() => {
+      const again = confirm('Play again?');
+      if (again) {
+        resetGame();
+      }
+    }, 500);
+  }
+
+  // Drawing functions
+  function drawScene() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    drawSnowman(wrongCount);
+  }
+
+  function drawBackground() {
+    // Night sky gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0, '#000814');
+    grad.addColorStop(0.5, '#001d3d');
+    grad.addColorStop(1, '#003566');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Snow ground
+    ctx.fillStyle = '#f5f5f5';
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height - 80);
+    ctx.quadraticCurveTo(canvas.width / 2, canvas.height - 140, canvas.width, canvas.height - 80);
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.lineTo(0, canvas.height);
+    ctx.closePath();
+    ctx.fill();
+
+    // Moon (cloud-covered)
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#fdfbd3';
+    ctx.beginPath();
+    ctx.arc(650, 90, 40, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Clouds over moon
+    ctx.fillStyle = 'rgba(200, 200, 200, 0.6)';
+    drawCloud(620, 80);
+    drawCloud(680, 110);
+
+    // Evergreen trees
+    drawTree(120, canvas.height - 80);
+    drawTree(220, canvas.height - 80);
+    drawTree(580, canvas.height - 80);
+    drawTree(680, canvas.height - 80);
+
+    // Fairy lights between trees
+    drawFairyLights(120, canvas.height - 180, 220, canvas.height - 180);
+    drawFairyLights(220, canvas.height - 180, 580, canvas.height - 200);
+    drawFairyLights(580, canvas.height - 200, 680, canvas.height - 190);
+
+    // Snowfall
+    drawSnow();
+  }
+
+  function drawCloud(x, y) {
+    ctx.beginPath();
+    ctx.arc(x, y, 25, 0, Math.PI * 2);
+    ctx.arc(x + 25, y + 10, 30, 0, Math.PI * 2);
+    ctx.arc(x - 25, y + 10, 30, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawTree(baseX, baseY) {
+    // trunk
+    ctx.fillStyle = '#4b2e19';
+    ctx.fillRect(baseX - 8, baseY - 40, 16, 40);
+
+    // layers of branches
+    ctx.fillStyle = '#0b3d1f';
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY - 120);
+    ctx.lineTo(baseX - 50, baseY - 40);
+    ctx.lineTo(baseX + 50, baseY - 40);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY - 90);
+    ctx.lineTo(baseX - 45, baseY - 20);
+    ctx.lineTo(baseX + 45, baseY - 20);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY - 60);
+    ctx.lineTo(baseX - 40, baseY + 0);
+    ctx.lineTo(baseX + 40, baseY + 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // snow on branches
+    ctx.fillStyle = '#f5f5f5';
+    ctx.beginPath();
+    ctx.ellipse(baseX, baseY - 40, 35, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(baseX, baseY - 20, 30, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(baseX, baseY, 25, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawFairyLights(x1, y1, x2, y2) {
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo((x1 + x2) / 2, y1 - 20, x2, y2);
+    ctx.stroke();
+
+    const segments = 10;
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const x = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * ((x1 + x2) / 2) + t * t * x2;
+      const y = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * (y1 - 20) + t * t * y2;
+      ctx.fillStyle = ['#ffd700', '#ff6b6b', '#4dabf7', '#51cf66'][i % 4];
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawSnow() {
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    for (let i = 0; i < 120; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      const r = Math.random() * 2 + 1;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawSnowman(stage) {
+    const centerX = canvas.width / 2;
+    const baseY = canvas.height - 90;
+
+    // 1: base ball
+    if (stage >= 1) {
+      ctx.fillStyle = '#f5f5f5';
+      ctx.beginPath();
+      ctx.arc(centerX, baseY - 20, 45, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 2: middle ball
+    if (stage >= 2) {
+      ctx.beginPath();
+      ctx.arc(centerX, baseY - 90, 35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3: top ball
+    if (stage >= 3) {
+      ctx.beginPath();
+      ctx.arc(centerX, baseY - 145, 28, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 4: left arm (stick)
+    if (stage >= 4) {
+      ctx.strokeStyle = '#5b3a1a';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(centerX - 35, baseY - 95);
+      ctx.lineTo(centerX - 80, baseY - 120);
+      ctx.stroke();
+    }
+
+    // 5: right arm (stick)
+    if (stage >= 5) {
+      ctx.strokeStyle = '#5b3a1a';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(centerX + 35, baseY - 95);
+      ctx.lineTo(centerX + 80, baseY - 120);
+      ctx.stroke();
+    }
+
+    // 6: left eye (rock)
+    if (stage >= 6) {
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.arc(centerX - 10, baseY - 152, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 7: right eye (rock)
+    if (stage >= 7) {
+      ctx.beginPath();
+      ctx.arc(centerX + 10, baseY - 152, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 8: carrot nose
+    if (stage >= 8) {
+      ctx.fillStyle = '#ff8c00';
+      ctx.beginPath();
+      ctx.moveTo(centerX, baseY - 145);
+      ctx.lineTo(centerX + 18, baseY - 142);
+      ctx.lineTo(centerX, baseY - 140);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 9: smile (rocks)
+    if (stage >= 9) {
+      ctx.fillStyle = '#333';
+      const smileY = baseY - 135;
+      const offsets = [-12, -6, 0, 6, 12];
+      offsets.forEach(off => {
+        ctx.beginPath();
+        ctx.arc(centerX + off, smileY, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  }
+
+  // Keyboard input from physical keyboard
+  document.addEventListener('keydown', (e) => {
+    const letter = e.key.toUpperCase();
+    if (letter >= 'A' && letter <= 'Z') {
+      handleGuess(letter);
+    }
+  });
+
+  // Start first game
+  resetGame();
+</script>
+</body>
+</html>
